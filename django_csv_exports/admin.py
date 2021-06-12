@@ -9,38 +9,27 @@ from builtins import str as text
 
 
 class CSVExportMixin:
-    def export_as_csv(admin_model, request, queryset):
+    def export_as_csv(self, request, queryset):
         """
         Generic csv export admin action.
         based on http://djangosnippets.org/snippets/1697/
         """
-        # everyone has perms to export as csv unless explicitly defined
-        if getattr(settings, 'DJANGO_EXPORTS_REQUIRE_PERM', None):
-            admin_opts = admin_model.opts
-            codename = '%s_%s' % ('csv', admin_opts.object_name.lower())
-            has_csv_permission = request.user.has_perm("%s.%s" % (admin_opts.app_label, codename))
+        opts = self.model._meta
+        if getattr(self, 'csv_fields', None):
+            field_names = self.csv_fields
         else:
-            has_csv_permission = admin_model.has_csv_permission(request) \
-                if (hasattr(admin_model, 'has_csv_permission') and callable(getattr(admin_model, 'has_csv_permission'))) \
-                else True
-        if has_csv_permission:
-            opts = admin_model.model._meta
-            if getattr(admin_model, 'csv_fields', None):
-                field_names = admin_model.csv_fields
-            else:
-                field_names = [field.name for field in opts.fields]
-                field_names.sort()
+            field_names = [field.name for field in opts.fields]
+            field_names.sort()
 
-            if django.VERSION[0] == 1 and django.VERSION[1] <= 5:
-                response = HttpResponse(mimetype='text/csv')
-            else:
-                response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = 'attachment; filename=%s.csv' % text(opts).replace('.', '_')
+        if django.VERSION[0] == 1 and django.VERSION[1] <= 5:
+            response = HttpResponse(mimetype='text/csv')
+        else:
+            response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename=%s.csv' % text(opts).replace('.', '_')
 
-            queryset = queryset.values_list(*field_names)
-            pandas.DataFrame(list(queryset), columns=field_names).to_csv(response, index=False, encoding='utf-8')
-            return response
-        return HttpResponseForbidden()
+        queryset = queryset.values_list(*field_names)
+        pandas.DataFrame(list(queryset), columns=field_names).to_csv(response, index=False, encoding='utf-8')
+        return response
     export_as_csv.short_description = "Export selected objects as csv file"
 
 
